@@ -1,1 +1,1 @@
-from .AR import ARModel
+from .ARModel import ARModel
