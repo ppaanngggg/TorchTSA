@@ -3,9 +3,9 @@ import typing
 
 import numpy as np
 import torch
+import torch.nn.functional as func
 import torch.optim as optim
 from torch.autograd import Variable
-from torch.distributions import Normal
 
 
 class ARModel:
@@ -17,13 +17,9 @@ class ARModel:
         self.theta_num = _theta_num
         self.use_const = _use_const
 
-        if self.use_const:  # optional const
-            self.const_arr = np.array([0.0])
-        self.theta_arr = np.random.rand(self.theta_num) - 0.5
-
-        self.normal = Normal(  # to get log_prob
-            Variable(torch.zeros(1)), 1.0
-        )
+        if self.use_const:
+            self.const_arr = np.zeros(1)
+        self.theta_arr = np.zeros(self.theta_num)
 
     def fit(
             self,
@@ -42,7 +38,7 @@ class ARModel:
         x_var = Variable(torch.from_numpy(np.stack(x_list))).float()
         y_var = Variable(torch.from_numpy(arr[self.theta_num:])).float()
 
-        # get vars
+        # get vars and optimizer
         tmp_params = []
         if self.use_const:
             const_tensor = torch.from_numpy(self.const_arr).float()
@@ -51,7 +47,9 @@ class ARModel:
             )
             tmp_params.append(const_var)
 
-        theta_tensor = torch.from_numpy(self.theta_arr).float().unsqueeze(0)
+        theta_tensor = torch.from_numpy(
+            self.theta_arr
+        ).float().unsqueeze(0)  # expand one dim
         theta_var = Variable(
             theta_tensor, requires_grad=True
         )
@@ -62,17 +60,18 @@ class ARModel:
         for i in range(_max_iter):
             logging.info('ITER: {}/{}'.format(i + 1, _max_iter))
 
+            # get loss
             tmp = torch.mm(theta_var, x_var)
             if self.use_const:
                 tmp += const_var
-            residual = y_var - tmp
-            log_likelihood = self.normal.log_prob(residual)
-            loss = -log_likelihood.mean()
+            loss = func.mse_loss(tmp, y_var)
 
+            # update
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+            # check loss change
             loss_value = loss.data[0]
             if last_loss is not None:
                 if abs(last_loss - loss_value) < _tol:
@@ -81,6 +80,7 @@ class ARModel:
         else:
             logging.warning('Maybe not converged')
 
+        # update array
         self.theta_arr = theta_var.data.numpy()[0]
         if self.use_const:
             self.const_arr = const_var.data.numpy()

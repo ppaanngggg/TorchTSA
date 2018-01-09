@@ -1,6 +1,6 @@
 import logging
 
-from statsmodels.tsa.ar_model import AR
+import pyflux as pf
 
 from TorchTSA.model import ARModel
 from TorchTSA.simulate import ARSim
@@ -16,9 +16,6 @@ ar_model.fit(sim_data)
 print(ar_model.getThetas(), ar_model.getConst())
 print(ar_model.predict(sim_data))
 
-sm_model = AR(sim_data)
-sm_ret = sm_model.fit(2)
-print(sm_ret.params)
-print(sm_model.predict(
-    sm_ret.params, len(sim_data), len(sim_data)
-))
+pf_model = pf.ARIMA(data=sim_data, ar=2, ma=0, integ=0)
+pf_ret = pf_model.fit("MLE")
+pf_ret.summary()

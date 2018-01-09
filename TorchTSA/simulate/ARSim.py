@@ -14,6 +14,7 @@ class ARSim:
             _theta_arr = [_theta_arr]
         self.theta_arr = np.array(_theta_arr)
         self.theta_num = len(self.theta_arr)
+
         self.const = _const
         self.sigma = _sigma
 
@@ -30,7 +31,7 @@ class ARSim:
 
         return new_value
 
-    def sample_n(self, _num: int) -> typing.List[float]:
+    def sample_n(self, _num: int) -> np.ndarray:
         for _ in range(_num):
             self.sample()
-        return self.ret[-_num:]
+        return np.array(self.ret[-_num:])
