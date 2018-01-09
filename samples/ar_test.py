@@ -13,7 +13,7 @@ sim_data = ar_sim.sample_n(1000)
 
 ar_model = ARModel(_theta_num=2, _use_const=True)
 ar_model.fit(sim_data)
-print(ar_model.getThetas(), ar_model.getConst())
+print(ar_model.getThetas(), ar_model.getConst(), ar_model.getSigma())
 print(ar_model.predict(sim_data))
 
 pf_model = pf.ARIMA(data=sim_data, ar=2, ma=0, integ=0)

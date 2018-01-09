@@ -14,23 +14,30 @@ class MASim:
             _theta_arr = [_theta_arr]
         self.theta_arr = np.array(_theta_arr)
         self.theta_num = len(self.theta_arr)
+
         self.const = _const
         self.sigma = _sigma
 
-        self.ret = [0.0] * len(self.theta_arr)
+        self.latent = [0.0] * self.theta_num
+        self.ret = []
 
     def sample(self) -> float:
-        tmp = self.ret[-self.theta_num:]
+        tmp = self.latent[-self.theta_num:]
         tmp.reverse()
-        value_arr = np.array(tmp)
-        new_value = self.const + (
-                value_arr * self.theta_arr
-        ).sum() + random.gauss(0, self.sigma)
+        latent_arr = np.array(tmp)
+        new_value = np.sum(
+            latent_arr * self.theta_arr
+        )
+
+        new_info = random.gauss(0, self.sigma)
+        self.latent.append(new_info)
+
+        new_value += new_info + self.const
         self.ret.append(new_value)
 
         return new_value
 
-    def sample_n(self, _num: int) -> typing.List[float]:
+    def sample_n(self, _num: int) -> np.ndarray:
         for _ in range(_num):
             self.sample()
-        return self.ret[-_num:]
+        return np.array(self.ret[-_num:])
