@@ -3,7 +3,6 @@ import typing
 
 import numpy as np
 import torch
-import torch.nn
 import torch.optim as optim
 from torch.autograd import Variable
 from torch.distributions import Normal
@@ -24,6 +23,7 @@ class ARModel:
 
     def fit(
             self, _arr: typing.Sequence[float],
+            _max_iter: int = 20,
     ):
         assert len(_arr) > self.theta_num
 
@@ -74,7 +74,7 @@ class ARModel:
         tmp_params.append(sigma_var)
 
         normal = Normal(0, sigma_var)
-        optimizer = optim.LBFGS(tmp_params)
+        optimizer = optim.LBFGS(tmp_params, max_iter=_max_iter)
 
         def closure():
             optimizer.zero_grad()
