@@ -1,37 +1,18 @@
-import random
 import typing
 
-import numpy as np
+from TorchTSA.simulate.ARMASim import ARMASim
 
 
-class ARSim:
+class ARSim(ARMASim):
 
     def __init__(
-            self, _theta_arr: typing.Union[float, typing.Sequence[float]],
+            self,
+            _phi_arr: typing.Union[float, typing.Sequence[float]],
             _const: float = 0.0, _sigma: float = 1.0,
     ):
-        if isinstance(_theta_arr, float) or isinstance(_theta_arr, int):
-            _theta_arr = [_theta_arr]
-        self.theta_arr = np.array(_theta_arr)
-        self.theta_num = len(self.theta_arr)
+        if isinstance(_phi_arr, float) or isinstance(_phi_arr, int):
+            _phi_arr = (_phi_arr,)
 
-        self.const = _const
-        self.sigma = _sigma
-
-        self.ret = [0.0] * len(self.theta_arr)
-
-    def sample(self) -> float:
-        tmp = self.ret[-self.theta_num:]
-        tmp.reverse()
-        value_arr = np.array(tmp)
-        new_value = self.const + (
-                value_arr * self.theta_arr
-        ).sum() + random.gauss(0, self.sigma)
-        self.ret.append(new_value)
-
-        return new_value
-
-    def sample_n(self, _num: int) -> np.ndarray:
-        for _ in range(_num):
-            self.sample()
-        return np.array(self.ret[-_num:])
+        super().__init__(
+            _phi_arr=_phi_arr, _const=_const, _sigma=_sigma
+        )

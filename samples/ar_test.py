@@ -8,7 +8,7 @@ from TorchTSA.simulate import ARSim
 logging.basicConfig(level=logging.INFO)
 
 # simulate data
-ar_sim = ARSim(_theta_arr=[0.8, -0.2], _const=0.0)
+ar_sim = ARSim(_phi_arr=[0.8, -0.2], _const=0.0)
 sim_data = ar_sim.sample_n(1000)
 
 ar_model = ARModel(_theta_num=2, _use_const=True)
