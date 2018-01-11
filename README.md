@@ -8,6 +8,18 @@ Use PyTorch to implement classical time series models. PyTorch has full ability 
 
 ## Document
 
-Please refer to samples
+- model:
 
-> WARNING: This project is current pre-alpha, the api maybe change a lot in the future
+  - ARModel
+  - MAModel
+  - ARMAModel
+
+- simulate:
+
+  - ARSim
+  - MASim
+  - ARMASim
+
+> Please refer to samples
+
+> > WARNING: This project is current pre-alpha, the api maybe change a lot in the future

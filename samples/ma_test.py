@@ -13,8 +13,7 @@ sim_data = ma_sim.sample_n(1000)
 
 ma_model = MAModel(2, _use_const=True)
 ma_model.fit(sim_data)
-print(ma_model.getThetas(), ma_model.getConst())
-print(ma_model.sigma_arr)
+print(ma_model.getThetas(), ma_model.getConst(), ma_model.getSigma())
 
 pf_model = pf.ARIMA(data=sim_data, ar=0, ma=2, integ=0)
 pf_ret = pf_model.fit("MLE")

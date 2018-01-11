@@ -27,6 +27,16 @@ class ARMAModel:
 
         self.latent_arr: np.ndarray = None
 
+    @staticmethod
+    def stack_delay_arr(
+            _arr: typing.Sequence[float], _num: int
+    ) -> np.ndarray:
+        ret_list = []
+        for i in range(_num):
+            shift = i + 1
+            ret_list.append(_arr[_num - shift: -shift])
+        return np.stack(ret_list)
+
     def fit(
             self, _arr: typing.Sequence[float],
             _max_iter: int = 20,
@@ -40,13 +50,10 @@ class ARMAModel:
             torch.from_numpy(arr[self.phi_num:]).float()
         )
 
-        # ar_x_var
-        ar_x_list = []
-        for i in range(self.phi_num):
-            shift = i + 1
-            ar_x_list.append(arr[self.phi_num - shift: -shift])
-        ar_x_arr = np.stack(ar_x_list)
-        ar_x_var = Variable(torch.from_numpy(ar_x_arr).float())
+        if self.phi_num > 0:
+            # ar_x_var
+            ar_x_arr = self.stack_delay_arr(arr, self.phi_num)
+            ar_x_var = Variable(torch.from_numpy(ar_x_arr).float())
 
         # get vars and optimizer
         params = []
@@ -100,36 +107,26 @@ class ARMAModel:
         )
 
         def closure():
-            # update latent var
-            tmp_phi = phi_var.data.numpy()
-            tmp_theta = theta_var.data.numpy()
-            tmp_const = const_var.data.numpy()
-            tmp_y = arr[self.phi_num:]
-            ma_x_list = []
-            for i in range(self.theta_num):
-                shift = i + 1
-                ma_x_list.append(
-                    self.latent_arr[self.theta_num - shift: -shift]
+            if self.theta_num > 0:
+                # update latent var
+                tmp_arr = arr[self.phi_num:] - const_var.data.numpy()
+                tmp_arr = tmp_arr - theta_var.data.numpy().dot(
+                    self.stack_delay_arr(self.latent_arr, self.theta_num)
                 )
-            ma_x_arr = np.stack(ma_x_list)
-
-            self.latent_arr[self.theta_num:] = \
-                tmp_y - tmp_phi.dot(ar_x_arr) - \
-                tmp_theta.dot(ma_x_arr) - tmp_const
-
-            ma_x_list = []
-            for i in range(self.theta_num):
-                shift = i + 1
-                ma_x_list.append(
-                    self.latent_arr[self.theta_num - shift: -shift]
-                )
-            ma_x_var = Variable(
-                torch.from_numpy(np.stack(ma_x_list)).float()
-            )
+                if self.phi_num > 0:
+                    tmp_arr = tmp_arr - phi_var.data.numpy().dot(ar_x_arr)
+                self.latent_arr[self.theta_num:] = tmp_arr
+                # ma_x_var
+                ma_x_arr = self.stack_delay_arr(self.latent_arr, self.theta_num)
+                ma_x_var = Variable(torch.from_numpy(ma_x_arr).float())
             # loss
             optimizer.zero_grad()
-            out = torch.mm(phi_var, ar_x_var) + torch.mm(theta_var, ma_x_var)
-            loss = -normal.log_prob(out + const_var - y_var).mean()
+            out = y_var - const_var
+            if self.phi_num > 0:
+                out = out - torch.mm(phi_var, ar_x_var)
+            if self.theta_num > 0:
+                out = out - torch.mm(theta_var, ma_x_var)
+            loss = -normal.log_prob(out).mean()
             logging.info('loss: {}'.format(loss.data.numpy()[0]))
             loss.backward()
             return loss
