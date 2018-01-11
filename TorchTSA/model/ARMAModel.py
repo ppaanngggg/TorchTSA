@@ -23,7 +23,7 @@ class ARMAModel:
         self.phi_arr: np.ndarray = np.zeros(self.phi_num)
         self.theta_arr: np.ndarray = np.zeros(self.theta_num)
         self.const_arr: np.ndarray = None
-        self.sigma_arr: np.ndarray = None
+        self.log_sigma_arr: np.ndarray = None
 
         self.latent_arr: np.ndarray = None
 
@@ -75,14 +75,14 @@ class ARMAModel:
                 torch.from_numpy(self.const_arr).float()
             )
         # 2. sigma
-        if self.sigma_arr is None:
+        if self.log_sigma_arr is None:
             std_value = np.std(arr)
-            self.sigma_arr = np.array([std_value])
-        sigma_var = Variable(
-            torch.from_numpy(self.sigma_arr).float(),
+            self.log_sigma_arr = np.log([std_value])
+        log_sigma_var = Variable(
+            torch.from_numpy(self.log_sigma_arr).float(),
             requires_grad=True
         )
-        params.append(sigma_var)
+        params.append(log_sigma_var)
         # 3. phi
         if self.phi_num > 0:
             phi_var = Variable(
@@ -98,7 +98,6 @@ class ARMAModel:
             )
             params.append(theta_var)
 
-        normal = Normal(0, sigma_var)
         optimizer = optim.LBFGS(params, max_iter=_max_iter)
 
         # init latent arr
@@ -116,6 +115,7 @@ class ARMAModel:
                 if self.phi_num > 0:
                     tmp_arr = tmp_arr - phi_var.data.numpy().dot(ar_x_arr)
                 self.latent_arr[self.theta_num:] = tmp_arr
+                # input(self.latent_arr)
                 # ma_x_var
                 ma_x_arr = self.stack_delay_arr(self.latent_arr, self.theta_num)
                 ma_x_var = Variable(torch.from_numpy(ma_x_arr).float())
@@ -126,7 +126,7 @@ class ARMAModel:
                 out = out - torch.mm(phi_var, ar_x_var)
             if self.theta_num > 0:
                 out = out - torch.mm(theta_var, ma_x_var)
-            loss = -normal.log_prob(out).mean()
+            loss = -Normal(0, torch.exp(log_sigma_var)).log_prob(out).mean()
             logging.info('loss: {}'.format(loss.data.numpy()[0]))
             loss.backward()
             return loss
@@ -136,11 +136,33 @@ class ARMAModel:
         # update array
         if self.use_const:
             self.const_arr = const_var.data.numpy()
-        self.sigma_arr = sigma_var.data.numpy()
+        self.log_sigma_arr = log_sigma_var.data.numpy()
         if self.phi_num > 0:
             self.phi_arr = phi_var.data.numpy()[0]
         if self.theta_num > 0:
             self.theta_arr = theta_var.data.numpy()[0]
+
+    def predict(
+            self,
+            _arr: typing.Sequence[float],
+            _latent: typing.Sequence[float] = None,
+    ) -> float:
+        arr = np.array(_arr)
+        if _latent is None:
+            latent = self.latent_arr
+        else:
+            latent = np.array(_latent)
+        value = self.const_arr[0]
+        if self.phi_num > 0:
+            tmp_arr = arr[-self.phi_num:]
+            tmp_arr = tmp_arr[::-1]
+            value += (tmp_arr * self.phi_arr).sum()
+        if self.theta_num > 0:
+            tmp_latent = latent[-self.theta_num:]
+            tmp_latent = tmp_latent[::-1]
+            value += (tmp_latent * self.theta_arr).sum()
+
+        return value
 
     def getPhis(self) -> np.ndarray:
         return self.phi_arr
@@ -152,4 +174,4 @@ class ARMAModel:
         return self.const_arr
 
     def getSigma(self) -> np.ndarray:
-        return self.sigma_arr
+        return np.exp(self.log_sigma_arr)
