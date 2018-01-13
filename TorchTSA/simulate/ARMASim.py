@@ -26,24 +26,20 @@ class ARMASim:
         self.latent = [0.0] * self.theta_num
 
     def sample(self) -> float:
-        new_value = 0.0
+        new_value = self.const
         if self.phi_num > 0:  # AR part
             tmp = self.ret[-self.phi_num:]
             tmp.reverse()
             tmp = np.array(tmp)
-            new_value += (
-                    tmp * self.phi_arr
-            ).sum()
+            new_value += (tmp * self.phi_arr).sum()
         if self.theta_num > 0:  # MA part
             tmp = self.latent[-self.theta_num:]
             tmp.reverse()
             tmp = np.array(tmp)
-            new_value += (
-                    tmp * self.theta_arr
-            ).sum()
+            new_value += (tmp * self.theta_arr).sum()
 
         new_info = random.gauss(0, self.sigma)
-        new_value += new_info + self.const
+        new_value += new_info
         self.ret.append(new_value)
         self.latent.append(new_info)
 

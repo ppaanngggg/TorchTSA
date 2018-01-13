@@ -60,8 +60,7 @@ class ARMAModel:
         # 1. const
         if self.const_arr is None:
             if self.use_const:
-                mean_value = np.mean(arr)
-                self.const_arr = np.array([mean_value])
+                self.const_arr = np.mean(arr, keepdims=True)
             else:
                 self.const_arr = np.zeros(1)
         if self.use_const:
@@ -76,8 +75,7 @@ class ARMAModel:
             )
         # 2. sigma
         if self.log_sigma_arr is None:
-            std_value = np.std(arr)
-            self.log_sigma_arr = np.log([std_value])
+            self.log_sigma_arr = np.log([np.std(arr, keepdims=True)])
         log_sigma_var = Variable(
             torch.from_numpy(self.log_sigma_arr).float(),
             requires_grad=True
