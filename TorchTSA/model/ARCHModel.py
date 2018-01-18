@@ -37,27 +37,33 @@ class ARCHModel:
             _max_iter: int = 20,
     ):
         assert len(_arr) > self.alpha_num
-        arr = np.array(_arr)
-
-        # get mu and remove mu from original data
-        if self.use_mu:
-            self.mu_arr = np.mean(_arr, keepdims=True)
-            arr = arr - self.mu_arr
-        else:
-            self.mu_arr = np.zeros(1)
 
         # y_var
+        arr = np.array(_arr)
         y_var = Variable(
             torch.from_numpy(arr[self.alpha_num:]).float()
         )
-        # x_var
-        square_arr = arr ** 2
-        x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
-        x_var = Variable(torch.from_numpy(x_arr).float())
 
         # get vars and optimizer
         params = []
-        # 1. const
+
+        # 1. mu
+        if self.use_mu:
+            self.mu_arr = np.mean(_arr, keepdims=True)
+        else:
+            self.mu_arr = np.zeros(1)
+        if self.use_mu:
+            mu_var = Variable(
+                torch.from_numpy(self.mu_arr).float(),
+                requires_grad=True
+            )
+            params.append(mu_var)
+        else:
+            mu_var = Variable(
+                torch.from_numpy(self.mu_arr).float()
+            )
+
+        # 2. const
         if self.log_const_arr is None:
             self.log_const_arr = np.log(
                 np.std(arr, keepdims=True) ** 2
@@ -67,7 +73,7 @@ class ARCHModel:
             requires_grad=True
         )
         params.append(log_const_var)
-        # 2. alpha
+        # 3. alpha
         if self.log_alpha_arr is None:
             self.log_alpha_arr = np.empty(self.alpha_num)
             init_value = 1. / np.sqrt(len(arr))
@@ -81,17 +87,25 @@ class ARCHModel:
         optimizer = optim.LBFGS(params, max_iter=_max_iter)
 
         def closure():
+            tmp_mu = mu_var.data.numpy()
+            square_arr = (arr - tmp_mu) ** 2
+            x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
+            x_var = Variable(torch.from_numpy(x_arr).float())
+
             optimizer.zero_grad()
             out = torch.mm(
                 torch.exp(log_alpha_var), x_var
             ) + torch.exp(log_const_var)
-            loss = -Normal(0, torch.sqrt(out)).log_prob(y_var).mean()
+            loss = -Normal(
+                mu_var, torch.sqrt(out)
+            ).log_prob(y_var).mean()
             logging.info('loss: {}'.format(loss.data.numpy()[0]))
             loss.backward()
             return loss
 
         optimizer.step(closure)
 
+        self.mu_arr = mu_var.data.numpy()
         self.log_const_arr = log_const_var.data.numpy()
         self.log_alpha_arr = log_alpha_var.data.numpy()[0]
 

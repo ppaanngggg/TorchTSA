@@ -16,15 +16,18 @@ class ARMAModel:
             _theta_num: int = 1,
             _use_const: bool = True
     ):
+        # fitter params
         self.phi_num = _phi_num  # len of phi_arr
         self.theta_num = _theta_num  # len of theta_arr
         self.use_const = _use_const
 
+        # model params
         self.phi_arr: np.ndarray = np.zeros(self.phi_num)
         self.theta_arr: np.ndarray = np.zeros(self.theta_num)
         self.const_arr: np.ndarray = None
         self.log_sigma_arr: np.ndarray = None
 
+        # latent for MA part
         self.latent_arr: np.ndarray = None
 
     @staticmethod
@@ -113,7 +116,6 @@ class ARMAModel:
                 if self.phi_num > 0:
                     tmp_arr = tmp_arr - phi_var.data.numpy().dot(ar_x_arr)
                 self.latent_arr[self.theta_num:] = tmp_arr
-                # input(self.latent_arr)
                 # ma_x_var
                 ma_x_arr = self.stack_delay_arr(self.latent_arr, self.theta_num)
                 ma_x_var = Variable(torch.from_numpy(ma_x_arr).float())
@@ -124,7 +126,9 @@ class ARMAModel:
                 out = out - torch.mm(phi_var, ar_x_var)
             if self.theta_num > 0:
                 out = out - torch.mm(theta_var, ma_x_var)
-            loss = -Normal(0, torch.exp(log_sigma_var)).log_prob(out).mean()
+            loss = -Normal(
+                0, torch.exp(log_sigma_var)
+            ).log_prob(out).mean()
             logging.info('loss: {}'.format(loss.data.numpy()[0]))
             loss.backward()
             return loss

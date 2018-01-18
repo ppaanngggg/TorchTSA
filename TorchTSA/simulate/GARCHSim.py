@@ -25,7 +25,7 @@ class GARCHSim:
         self.beta_num = len(_beta_arr)
 
         for a, b in zip(_alpha_arr, _beta_arr):
-            assert a + b < 1
+            assert a + b <= 1
 
         self.const = _const
         assert self.const > 0

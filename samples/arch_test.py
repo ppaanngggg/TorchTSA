@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 arch_sim = ARCHSim((0.6, 0.1), _const=0.1, _mu=0.0)
 sim_data = arch_sim.sample_n(1000)
 
-arch_model = ARCHModel(2, _use_mu=False)
+arch_model = ARCHModel(2, _use_mu=True)
 arch_model.fit(sim_data)
 print(
     arch_model.getAlpha(),
