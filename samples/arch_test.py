@@ -13,7 +13,7 @@ sim_data = arch_sim.sample_n(1000)
 arch_model = ARCHModel(2, _use_mu=True)
 arch_model.fit(sim_data)
 print(
-    arch_model.getAlpha(),
+    arch_model.getAlphas(),
     arch_model.getConst(),
     arch_model.getMu(),
 )

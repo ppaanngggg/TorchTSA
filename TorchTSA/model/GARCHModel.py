@@ -24,6 +24,9 @@ class GARCHModel:
             _beta_num: int = 1,
             _use_mu: bool = True,
     ):
+        assert _alpha_num > 0
+        assert _beta_num >= 0
+
         # fitter params
         self.alpha_num = _alpha_num
         self.beta_num = _beta_num
@@ -80,15 +83,14 @@ class GARCHModel:
             )
         init_value = 1. / np.sqrt(len(arr))
         # 2. logit_alpha_var
-        if self.alpha_num > 0:
-            if self.logit_alpha_arr is None:
-                self.logit_alpha_arr = np.empty(self.alpha_num)
-                self.logit_alpha_arr.fill(logit(init_value))
-            logit_alpha_var = Variable(
-                torch.from_numpy(self.logit_alpha_arr).float().unsqueeze(0),
-                requires_grad=True
-            )
-            params.append(logit_alpha_var)
+        if self.logit_alpha_arr is None:
+            self.logit_alpha_arr = np.empty(self.alpha_num)
+            self.logit_alpha_arr.fill(logit(init_value))
+        logit_alpha_var = Variable(
+            torch.from_numpy(self.logit_alpha_arr).float().unsqueeze(0),
+            requires_grad=True
+        )
+        params.append(logit_alpha_var)
         # 3. logit_beta_arr
         if self.beta_num > 0:
             if self.logit_beta_arr is None:
@@ -110,49 +112,65 @@ class GARCHModel:
         params.append(log_const_var)
 
         optimizer = optim.LBFGS(params, max_iter=_max_iter)
-        self.latent_arr = np.empty(
-            len(_arr) + self.beta_num - self.alpha_num
-        )
+
+        if self.beta_num > 0:  # alloc latent_arr
+            self.latent_arr = np.empty(
+                len(_arr) + self.beta_num - self.alpha_num
+            )
 
         def closure():
-            if self.alpha_num > 0:
-                # ar_x_var
-                tmp_mu = mu_var.data.numpy()
-                square_arr = (arr - tmp_mu) ** 2
-                ar_x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
-                ar_x_var = Variable(torch.from_numpy(ar_x_arr).float())
+            # ar_x_var
+            tmp_mu = mu_var.data.numpy()
+            square_arr = (arr - tmp_mu) ** 2
+            ar_x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
+            ar_x_var = Variable(torch.from_numpy(ar_x_arr).float())
             if self.beta_num > 0:
                 # estimate latent_arr
                 tmp_arr = ilogit(
                     logit_alpha_var.data.numpy()
                 ).dot(ar_x_arr) + np.exp(log_const_var.data.numpy())  # ar and const
                 self.latent_arr[self.beta_num:] = tmp_arr
-                self.latent_arr[:self.beta_num] = self.latent_arr[self.beta_num]
-                tmp_arr = tmp_arr + ilogit(logit_beta_var.data.numpy()).dot(
-                    self.stack_delay_arr(self.latent_arr, self.beta_num)
-                )  # ma
-                self.latent_arr[self.beta_num:] = tmp_arr
-                self.latent_arr[:self.beta_num] = self.latent_arr[self.beta_num]
+                inv_beta_arr = ilogit(logit_beta_var.data.numpy())[::-1]
+                padding_value = max(0, tmp_mu / (1 - inv_beta_arr.sum()))
+                self.latent_arr[:self.beta_num] = padding_value
+                for i in range(self.beta_num, len(self.latent_arr)):
+                    begin_i = i - self.beta_num
+                    self.latent_arr[i] = self.latent_arr[i] + (
+                            self.latent_arr[begin_i:i] * inv_beta_arr
+                    ).sum()
                 # ma_x_var
                 ma_x_arr = self.stack_delay_arr(self.latent_arr, self.beta_num)
                 ma_x_var = Variable(torch.from_numpy(ma_x_arr).float())
 
+            # print(
+            #     'PARAMS:',
+            #     ilogit(logit_alpha_var.data.numpy()),
+            #     ilogit(logit_beta_var.data.numpy()),
+            #     np.exp(log_const_var.data.numpy()),
+            #     mu_var.data.numpy()
+            # )
             # get the ML loss
             optimizer.zero_grad()
-            out = torch.exp(log_const_var)
-            if self.alpha_num > 0:
-                out = out + torch.mm(
-                    torch.sigmoid(logit_alpha_var), ar_x_var
-                )
+            out = torch.mm(
+                torch.sigmoid(logit_alpha_var), ar_x_var
+            )
             if self.beta_num > 0:
                 out = out + torch.mm(
                     torch.sigmoid(logit_beta_var), ma_x_var
                 )
+            out = out + torch.exp(log_const_var)
             loss = -Normal(
                 mu_var, torch.sqrt(out)
             ).log_prob(y_var).mean()
-            logging.info('loss: {}'.format(loss.data.numpy()[0]))
             loss.backward()
+            # print(
+            #     'GRAD:',
+            #     logit_alpha_var.grad.data.numpy(),
+            #     logit_beta_var.grad.data.numpy(),
+            #     log_const_var.grad.data.numpy(),
+            #     mu_var.grad.data.numpy()
+            # )
+            logging.info('loss: {}'.format(loss.data.numpy()[0]))
 
             return loss
 
@@ -160,8 +178,7 @@ class GARCHModel:
 
         self.mu_arr = mu_var.data.numpy()
         self.log_const_arr = log_const_var.data.numpy()
-        if self.alpha_num > 0:
-            self.logit_alpha_arr = logit_alpha_var.data.numpy()[0]
+        self.logit_alpha_arr = logit_alpha_var.data.numpy()[0]
         if self.beta_num > 0:
             self.logit_beta_arr = logit_beta_var.data.numpy()[0]
 
