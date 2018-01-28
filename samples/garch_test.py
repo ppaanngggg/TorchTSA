@@ -12,8 +12,8 @@ garch_sim = GARCHSim(
 )
 sim_data = garch_sim.sample_n(2000)
 
-garch_model = GARCHModel(1, 1)
-garch_model.fit(sim_data, _max_iter=50)
+garch_model = GARCHModel(1, 1, _use_mu=True)
+garch_model.fit(sim_data)
 print(
     garch_model.getAlphas(), garch_model.getBetas(),
     garch_model.getConst(), garch_model.getMu(),
