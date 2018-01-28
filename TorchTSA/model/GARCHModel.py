@@ -1,11 +1,7 @@
-import logging
 import typing
 
 import numpy as np
-import torch
-import torch.optim as optim
-from torch.autograd import Variable
-from torch.distributions import Normal
+from scipy.optimize import minimize
 
 
 def logit(x):
@@ -14,6 +10,11 @@ def logit(x):
 
 def ilogit(x):
     return 1. / (1. + np.exp(-x))
+
+
+def logpdf(value, mu, var):
+    return - (value - mu) ** 2 / (2 * var) - \
+           np.log(np.sqrt(2 * np.pi * var))
 
 
 class GARCHModel:
@@ -38,6 +39,8 @@ class GARCHModel:
         self.logit_beta_arr: np.ndarray = None
         self.log_const_arr: np.ndarray = None
 
+        self.arr: np.ndarray = None
+        self.y_arr: np.ndarray = None
         # latent for MA part
         self.latent_arr: np.ndarray = None
 
@@ -51,136 +54,89 @@ class GARCHModel:
             ret_list.append(_arr[_num - shift: -shift])
         return np.stack(ret_list)
 
+    def func(self, _params: np.ndarray):
+        # split params
+        if self.use_mu:
+            mu = _params[-1]
+        else:
+            mu = self.mu_arr
+        alpha = ilogit(_params[:self.alpha_num])
+        beta = ilogit(_params[self.alpha_num:self.alpha_num + self.beta_num])
+        const = np.exp(_params[self.alpha_num + self.beta_num])
+
+        square_arr = (self.arr - mu) ** 2
+        ar_x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
+        if self.beta_num > 0:  # estimate latent_arr
+            self.latent_arr[self.beta_num:] = alpha.dot(ar_x_arr) + const
+            self.latent_arr[:self.beta_num] = max(0, mu / (1 - beta.sum()))
+            ma_x_arr = self.stack_delay_arr(self.latent_arr, self.beta_num)
+            self.latent_arr[self.beta_num:] += beta.dot(ma_x_arr)
+            ma_x_arr = self.stack_delay_arr(self.latent_arr, self.beta_num)
+
+        var = alpha.dot(ar_x_arr)
+        if self.beta_num > 0:
+            var = var + beta.dot(ma_x_arr)
+        var = var + const
+        loss = -logpdf(self.y_arr, mu, var).mean()
+
+        return loss
+
     def fit(
             self, _arr: typing.Sequence[float],
-            _max_iter: int = 20,
+            _max_iter: int = 50, _disp: bool = False,
     ):
         assert len(_arr) > self.alpha_num
 
         # init params and latent
-        arr = np.array(_arr)
+        self.arr = np.array(_arr)
 
         # get vars and optimizer
-        # 0. y_var
-        y_var = Variable(
-            torch.from_numpy(arr[self.alpha_num:]).float()
-        )
-        params = []
-        # 1. mu_var
+        # 1. mu_arr
         if self.use_mu:
-            self.mu_arr = np.mean(_arr, keepdims=True)
+            self.mu_arr = np.mean(self.arr, keepdims=True)
         else:
             self.mu_arr = np.zeros(1)
-        if self.use_mu:
-            mu_var = Variable(
-                torch.from_numpy(self.mu_arr).float(),
-                requires_grad=True
-            )
-            params.append(mu_var)
-        else:
-            mu_var = Variable(
-                torch.from_numpy(self.mu_arr).float()
-            )
-        init_value = 1. / np.sqrt(len(arr))
-        # 2. logit_alpha_var
+
+        init_value = 1. / np.sqrt(len(self.arr))
+        # 2. logit_alpha_arr
         if self.logit_alpha_arr is None:
             self.logit_alpha_arr = np.empty(self.alpha_num)
             self.logit_alpha_arr.fill(logit(init_value))
-        logit_alpha_var = Variable(
-            torch.from_numpy(self.logit_alpha_arr).float().unsqueeze(0),
-            requires_grad=True
-        )
-        params.append(logit_alpha_var)
         # 3. logit_beta_arr
         if self.beta_num > 0:
             if self.logit_beta_arr is None:
                 self.logit_beta_arr = np.empty(self.beta_num)
                 self.logit_beta_arr.fill(logit(init_value))
-            logit_beta_var = Variable(
-                torch.from_numpy(self.logit_beta_arr).float().unsqueeze(0),
-                requires_grad=True
-            )
-            params.append(logit_beta_var)
         # 4. log_const_arr
         if self.log_const_arr is None:
             self.log_const_arr = np.empty(1)
             self.log_const_arr.fill(np.log(init_value))
-        log_const_var = Variable(
-            torch.from_numpy(self.log_const_arr).float(),
-            requires_grad=True
-        )
-        params.append(log_const_var)
 
-        optimizer = optim.LBFGS(params, max_iter=_max_iter)
-
+        # init target, latent_arr
+        self.y_arr = self.arr[self.alpha_num:]
         if self.beta_num > 0:  # alloc latent_arr
             self.latent_arr = np.empty(
-                len(_arr) + self.beta_num - self.alpha_num
+                len(self.arr) + self.beta_num - self.alpha_num
             )
 
-        def closure():
-            # ar_x_var
-            tmp_mu = mu_var.data.numpy()
-            square_arr = (arr - tmp_mu) ** 2
-            ar_x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
-            ar_x_var = Variable(torch.from_numpy(ar_x_arr).float())
-            if self.beta_num > 0:
-                # estimate latent_arr
-                tmp_arr = ilogit(
-                    logit_alpha_var.data.numpy()
-                ).dot(ar_x_arr) + np.exp(log_const_var.data.numpy())  # ar and const
-                self.latent_arr[self.beta_num:] = tmp_arr
-                inv_beta_arr = ilogit(logit_beta_var.data.numpy())[::-1]
-                padding_value = max(0, tmp_mu / (1 - inv_beta_arr.sum()))
-                self.latent_arr[:self.beta_num] = padding_value
-                for i in range(self.beta_num, len(self.latent_arr)):
-                    begin_i = i - self.beta_num
-                    self.latent_arr[i] = self.latent_arr[i] + (
-                            self.latent_arr[begin_i:i] * inv_beta_arr
-                    ).sum()
-                # ma_x_var
-                ma_x_arr = self.stack_delay_arr(self.latent_arr, self.beta_num)
-                ma_x_var = Variable(torch.from_numpy(ma_x_arr).float())
-
-            # print(
-            #     'PARAMS:',
-            #     ilogit(logit_alpha_var.data.numpy()),
-            #     ilogit(logit_beta_var.data.numpy()),
-            #     np.exp(log_const_var.data.numpy()),
-            #     mu_var.data.numpy()
-            # )
-            # get the ML loss
-            optimizer.zero_grad()
-            out = torch.mm(
-                torch.sigmoid(logit_alpha_var), ar_x_var
-            )
-            if self.beta_num > 0:
-                out = out + torch.mm(
-                    torch.sigmoid(logit_beta_var), ma_x_var
-                )
-            out = out + torch.exp(log_const_var)
-            loss = -Normal(
-                mu_var, torch.sqrt(out)
-            ).log_prob(y_var).mean()
-            loss.backward()
-            # print(
-            #     'GRAD:',
-            #     logit_alpha_var.grad.data.numpy(),
-            #     logit_beta_var.grad.data.numpy(),
-            #     log_const_var.grad.data.numpy(),
-            #     mu_var.grad.data.numpy()
-            # )
-            logging.info('loss: {}'.format(loss.data.numpy()[0]))
-
-            return loss
-
-        optimizer.step(closure)
-
-        self.mu_arr = mu_var.data.numpy()
-        self.log_const_arr = log_const_var.data.numpy()
-        self.logit_alpha_arr = logit_alpha_var.data.numpy()[0]
+        init_params = self.logit_alpha_arr
         if self.beta_num > 0:
-            self.logit_beta_arr = logit_beta_var.data.numpy()[0]
+            init_params = np.concatenate((init_params, self.logit_beta_arr))
+        init_params = np.concatenate((init_params, self.log_const_arr))
+        if self.use_mu:
+            init_params = np.concatenate((init_params, self.mu_arr))
+
+        res = minimize(
+            self.func, init_params, method='L-BFGS-B',
+            options={'maxiter': _max_iter, 'disp': _disp}
+        )
+        params = res.x
+
+        self.logit_alpha_arr = params[:self.alpha_num]
+        self.logit_beta_arr = params[self.alpha_num:self.alpha_num + self.beta_num]
+        self.log_const_arr = params[self.alpha_num + self.beta_num]
+        if self.use_mu:
+            self.mu_arr = params[-1]
 
     def getAlphas(self) -> np.ndarray:
         return ilogit(self.logit_alpha_arr)

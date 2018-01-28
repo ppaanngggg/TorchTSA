@@ -16,6 +16,10 @@ class ARMAModel:
             _theta_num: int = 1,
             _use_const: bool = True
     ):
+        assert _phi_num >= 0
+        assert _theta_num >= 0
+        assert _phi_num + _theta_num > 0
+
         # fitter params
         self.phi_num = _phi_num  # len of phi_arr
         self.theta_num = _theta_num  # len of theta_arr

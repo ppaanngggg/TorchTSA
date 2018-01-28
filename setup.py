@@ -8,7 +8,6 @@ setup(
         'TorchTSA',
     ],
     install_requires=[
-        'numpy',
-        'torch',
+        'numpy', 'scipy',
     ]
 )
