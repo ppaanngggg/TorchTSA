@@ -2,7 +2,6 @@ import typing
 
 import numpy as np
 from scipy.optimize import minimize
-from scipy.stats import norm
 
 
 def logit(x):
@@ -11,6 +10,11 @@ def logit(x):
 
 def ilogit(x):
     return 1. / (1. + np.exp(-x))
+
+
+def logpdf(value, mu, var):
+    return - (value - mu) ** 2 / (2 * var) - \
+           np.log(np.sqrt(2 * np.pi * var))
 
 
 class GARCHModel:
@@ -73,9 +77,7 @@ class GARCHModel:
         if self.beta_num > 0:
             var = var + beta.dot(ma_x_arr)
         var = var + const
-        loss = -norm(
-            loc=mu, scale=np.sqrt(var)
-        ).logpdf(self.y_arr).mean()
+        loss = -logpdf(self.y_arr, mu, var).mean()
 
         return loss
 
