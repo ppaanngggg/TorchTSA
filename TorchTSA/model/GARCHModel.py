@@ -117,14 +117,12 @@ class GARCHModel:
                 len(self.arr) + self.beta_num - self.alpha_num
             )
 
-        init_params = np.concatenate([
-            self.logit_alpha_arr, self.logit_beta_arr,
-            self.log_const_arr
-        ])
+        init_params = self.logit_alpha_arr
+        if self.beta_num > 0:
+            init_params = np.concatenate((init_params, self.logit_beta_arr))
+        init_params = np.concatenate((init_params, self.log_const_arr))
         if self.use_mu:
-            init_params = np.concatenate([
-                init_params, self.mu_arr
-            ])
+            init_params = np.concatenate((init_params, self.mu_arr))
 
         res = minimize(
             self.func, init_params, method='L-BFGS-B',
