@@ -1,6 +1,7 @@
 import typing
 
 import numpy as np
+from TorchTSA.utils.recursions import arma_recursion
 from scipy.optimize import minimize
 
 from TorchTSA.utils.math import logpdf
@@ -48,8 +49,9 @@ class ARMAModel:
 
         mu = phi.dot(self.x_arr) + const
         if self.theta_num > 0:
-            res = self.y_arr - mu
-
+            self.latent_arr[:self.theta_num] = 0.0
+            self.latent_arr[self.theta_num:] = self.y_arr - mu
+            arma_recursion(self.latent_arr, theta)
             mu += theta.dot(stack_delay_arr(
                 self.latent_arr, self.theta_num
             ))

@@ -2,7 +2,6 @@ import logging
 import time
 
 import pyflux as pf
-import statsmodels.api as sm
 
 from TorchTSA.model import ARMAModel
 from TorchTSA.simulate import ARMASim
@@ -29,10 +28,3 @@ start_time = time.time()
 pf_ret = pf_model.fit("MLE")
 print(time.time() - start_time)
 pf_ret.summary()
-
-sm_model = sm.tsa.ARMA(sim_data, (1, 2))
-start_time = time.time()
-sm_ret = sm_model.fit(disp=False)
-print(time.time() - start_time)
-print(sm_ret.summary())
-
