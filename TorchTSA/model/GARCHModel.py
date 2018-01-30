@@ -1,6 +1,7 @@
 import typing
 
 import numpy as np
+from TorchTSA.utils.recursions import garch_recursion
 from scipy.optimize import minimize
 
 from TorchTSA.utils.math import ilogit, logit, logpdf
@@ -48,9 +49,10 @@ class GARCHModel:
         ar_x_arr = stack_delay_arr(square_arr, self.alpha_num)
         if self.beta_num > 0:  # estimate latent_arr
             self.latent_arr[self.beta_num:] = alpha.dot(ar_x_arr) + const
-            self.latent_arr[:self.beta_num] = max(0, mu / (1 - beta.sum()))
-            ma_x_arr = stack_delay_arr(self.latent_arr, self.beta_num)
-            self.latent_arr[self.beta_num:] += beta.dot(ma_x_arr)
+            self.latent_arr[:self.beta_num] = max(
+                0, const / (1 - alpha.sum() - beta.sum())
+            )
+            garch_recursion(self.latent_arr, beta)
             ma_x_arr = stack_delay_arr(self.latent_arr, self.beta_num)
 
         var = alpha.dot(ar_x_arr)
