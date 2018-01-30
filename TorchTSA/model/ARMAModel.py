@@ -1,11 +1,10 @@
-import logging
 import typing
 
 import numpy as np
-import torch
-import torch.optim as optim
-from torch.autograd import Variable
-from torch.distributions import Normal
+from scipy.optimize import minimize
+
+from TorchTSA.utils.math import logpdf
+from TorchTSA.utils.op import stack_delay_arr
 
 
 class ARMAModel:
@@ -26,127 +25,101 @@ class ARMAModel:
         self.use_const = _use_const
 
         # model params
-        self.phi_arr: np.ndarray = np.zeros(self.phi_num)
-        self.theta_arr: np.ndarray = np.zeros(self.theta_num)
+        self.phi_arr: np.ndarray = None
+        self.theta_arr: np.ndarray = None
         self.const_arr: np.ndarray = None
         self.log_sigma_arr: np.ndarray = None
 
-        # latent for MA part
+        # data buf for fitting
+        self.arr: np.ndarray = None
+        self.y_arr: np.ndarray = None
+        self.x_arr: np.ndarray = None
         self.latent_arr: np.ndarray = None
 
-    @staticmethod
-    def stack_delay_arr(
-            _arr: typing.Sequence[float], _num: int
-    ) -> np.ndarray:
-        ret_list = []
-        for i in range(_num):
-            shift = i + 1
-            ret_list.append(_arr[_num - shift: -shift])
-        return np.stack(ret_list)
+    def func(self, _params: np.ndarray):
+        # split params
+        sigma = np.exp(_params[0])
+        phi = _params[1:1 + self.phi_num]
+        theta = _params[1 + self.phi_num: 1 + self.phi_num + self.theta_num]
+        if self.use_const:
+            const = _params[-1]
+        else:
+            const = self.const_arr
+
+        mu = phi.dot(self.x_arr) + const
+        if self.theta_num > 0:
+            res = self.y_arr - mu
+
+            mu += theta.dot(stack_delay_arr(
+                self.latent_arr, self.theta_num
+            ))
+
+        loss = -logpdf(self.y_arr, mu, sigma ** 2).mean()
+
+        return loss
 
     def fit(
             self, _arr: typing.Sequence[float],
-            _max_iter: int = 20,
+            _max_iter: int = 50, _disp: bool = False,
     ):
         assert len(_arr) > self.phi_num
         assert len(_arr) > self.theta_num
 
-        # y_var
-        arr = np.array(_arr)
-        y_var = Variable(
-            torch.from_numpy(arr[self.phi_num:]).float()
-        )
+        self.arr = np.array(_arr)
 
-        if self.phi_num > 0:
-            # ar_x_var
-            ar_x_arr = self.stack_delay_arr(arr, self.phi_num)
-            ar_x_var = Variable(torch.from_numpy(ar_x_arr).float())
-
-        # get vars and optimizer
-        params = []
         # 1. const
-        if self.const_arr is None:
-            if self.use_const:
-                self.const_arr = np.mean(arr, keepdims=True)
-            else:
-                self.const_arr = np.zeros(1)
         if self.use_const:
-            const_var = Variable(
-                torch.from_numpy(self.const_arr).float(),
-                requires_grad=True
-            )
-            params.append(const_var)
+            self.const_arr = np.mean(self.arr, keepdims=True)
         else:
-            const_var = Variable(
-                torch.from_numpy(self.const_arr).float()
-            )
+            self.const_arr = np.zeros(1)
         # 2. sigma
         if self.log_sigma_arr is None:
-            self.log_sigma_arr = np.log([np.std(arr, keepdims=True)])
-        log_sigma_var = Variable(
-            torch.from_numpy(self.log_sigma_arr).float(),
-            requires_grad=True
-        )
-        params.append(log_sigma_var)
+            self.log_sigma_arr = np.log(np.std(self.arr, keepdims=True))
         # 3. phi
         if self.phi_num > 0:
-            phi_var = Variable(
-                torch.from_numpy(self.phi_arr).float().unsqueeze(0),
-                requires_grad=True
-            )
-            params.append(phi_var)
+            self.phi_arr = np.zeros(self.phi_num)
         # 4. theta
         if self.theta_num > 0:
-            theta_var = Variable(
-                torch.from_numpy(self.theta_arr).float().unsqueeze(0),
-                requires_grad=True
-            )
-            params.append(theta_var)
-
-        optimizer = optim.LBFGS(params, max_iter=_max_iter)
+            self.theta_arr = np.zeros(self.theta_num)
 
         # init latent arr
-        self.latent_arr = np.zeros(
-            len(arr) + self.theta_num - self.phi_num
+        self.y_arr = self.arr[self.phi_num:]
+        self.x_arr = stack_delay_arr(self.arr, self.phi_num)
+        if self.theta_num > 0:
+            self.latent_arr = np.zeros(
+                len(self.arr) - self.phi_num + self.theta_num
+            )
+
+        # concatenate params
+        init_params = self.log_sigma_arr
+        if self.phi_num > 0:
+            init_params = np.concatenate((
+                init_params, self.phi_arr
+            ))
+        if self.theta_num > 0:
+            init_params = np.concatenate((
+                init_params, self.theta_arr
+            ))
+        if self.use_const:
+            init_params = np.concatenate((
+                init_params, self.const_arr
+            ))
+
+        res = minimize(
+            self.func, init_params, method='L-BFGS-B',
+            options={'maxiter': _max_iter, 'disp': _disp},
         )
-
-        def closure():
-            if self.theta_num > 0:
-                # update latent var
-                tmp_arr = arr[self.phi_num:] - const_var.data.numpy()
-                tmp_arr = tmp_arr - theta_var.data.numpy().dot(
-                    self.stack_delay_arr(self.latent_arr, self.theta_num)
-                )
-                if self.phi_num > 0:
-                    tmp_arr = tmp_arr - phi_var.data.numpy().dot(ar_x_arr)
-                self.latent_arr[self.theta_num:] = tmp_arr
-                # ma_x_var
-                ma_x_arr = self.stack_delay_arr(self.latent_arr, self.theta_num)
-                ma_x_var = Variable(torch.from_numpy(ma_x_arr).float())
-            # loss
-            optimizer.zero_grad()
-            out = y_var - const_var
-            if self.phi_num > 0:
-                out = out - torch.mm(phi_var, ar_x_var)
-            if self.theta_num > 0:
-                out = out - torch.mm(theta_var, ma_x_var)
-            loss = -Normal(
-                0, torch.exp(log_sigma_var)
-            ).log_prob(out).mean()
-            logging.info('loss: {}'.format(loss.data.numpy()[0]))
-            loss.backward()
-            return loss
-
-        optimizer.step(closure)
+        params = res.x
 
         # update array
+        self.log_sigma_arr = params[0]
+        params = params[1:]
         if self.use_const:
-            self.const_arr = const_var.data.numpy()
-        self.log_sigma_arr = log_sigma_var.data.numpy()
+            self.const_arr = params[-1]
         if self.phi_num > 0:
-            self.phi_arr = phi_var.data.numpy()[0]
+            self.phi_arr = params[:self.phi_num]
         if self.theta_num > 0:
-            self.theta_arr = theta_var.data.numpy()[0]
+            self.theta_arr = params[self.phi_num:self.phi_num + self.theta_num]
 
     def predict(
             self,

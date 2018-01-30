@@ -3,18 +3,8 @@ import typing
 import numpy as np
 from scipy.optimize import minimize
 
-
-def logit(x):
-    return np.log(x) - np.log(1 - x)
-
-
-def ilogit(x):
-    return 1. / (1. + np.exp(-x))
-
-
-def logpdf(value, mu, var):
-    return - (value - mu) ** 2 / (2 * var) - \
-           np.log(np.sqrt(2 * np.pi * var))
+from TorchTSA.utils.math import ilogit, logit, logpdf
+from TorchTSA.utils.op import stack_delay_arr
 
 
 class GARCHModel:
@@ -44,16 +34,6 @@ class GARCHModel:
         # latent for MA part
         self.latent_arr: np.ndarray = None
 
-    @staticmethod
-    def stack_delay_arr(
-            _arr: typing.Sequence[float], _num: int
-    ) -> np.ndarray:
-        ret_list = []
-        for i in range(_num):
-            shift = i + 1
-            ret_list.append(_arr[_num - shift: -shift])
-        return np.stack(ret_list)
-
     def func(self, _params: np.ndarray):
         # split params
         if self.use_mu:
@@ -65,13 +45,13 @@ class GARCHModel:
         const = np.exp(_params[self.alpha_num + self.beta_num])
 
         square_arr = (self.arr - mu) ** 2
-        ar_x_arr = self.stack_delay_arr(square_arr, self.alpha_num)
+        ar_x_arr = stack_delay_arr(square_arr, self.alpha_num)
         if self.beta_num > 0:  # estimate latent_arr
             self.latent_arr[self.beta_num:] = alpha.dot(ar_x_arr) + const
             self.latent_arr[:self.beta_num] = max(0, mu / (1 - beta.sum()))
-            ma_x_arr = self.stack_delay_arr(self.latent_arr, self.beta_num)
+            ma_x_arr = stack_delay_arr(self.latent_arr, self.beta_num)
             self.latent_arr[self.beta_num:] += beta.dot(ma_x_arr)
-            ma_x_arr = self.stack_delay_arr(self.latent_arr, self.beta_num)
+            ma_x_arr = stack_delay_arr(self.latent_arr, self.beta_num)
 
         var = alpha.dot(ar_x_arr)
         if self.beta_num > 0:
@@ -87,10 +67,8 @@ class GARCHModel:
     ):
         assert len(_arr) > self.alpha_num
 
-        # init params and latent
         self.arr = np.array(_arr)
 
-        # get vars and optimizer
         # 1. mu_arr
         if self.use_mu:
             self.mu_arr = np.mean(self.arr, keepdims=True)
