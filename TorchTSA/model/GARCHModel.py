@@ -49,9 +49,7 @@ class GARCHModel:
         ar_x_arr = stack_delay_arr(square_arr, self.alpha_num)
         if self.beta_num > 0:  # estimate latent_arr
             self.latent_arr[self.beta_num:] = alpha.dot(ar_x_arr) + const
-            self.latent_arr[:self.beta_num] = max(
-                0, const / (1 - alpha.sum() - beta.sum())
-            )
+            self.latent_arr[:self.beta_num] = square_arr.mean()
             garch_recursion(self.latent_arr, beta)
             ma_x_arr = stack_delay_arr(self.latent_arr, self.beta_num)
 
@@ -119,7 +117,9 @@ class GARCHModel:
         params = self.optimize(init_params, _max_iter, _disp)
 
         self.logit_alpha_arr = params[:self.alpha_num]
-        self.logit_beta_arr = params[self.alpha_num:self.alpha_num + self.beta_num]
+        self.logit_beta_arr = params[
+            self.alpha_num:self.alpha_num + self.beta_num
+        ]
         self.log_const_arr = params[self.alpha_num + self.beta_num]
         if self.use_mu:
             self.mu_arr = params[-1]
@@ -143,6 +143,12 @@ class GARCHModel:
             value += self.getBetas().dot(tmp_latent)
 
         return value
+
+    def getVolatility(self) -> typing.Union[None, np.ndarray]:
+        if self.beta_num > 0:
+            return np.sqrt(self.latent_arr[self.beta_num:])
+        else:
+            return None
 
     def getAlphas(self) -> np.ndarray:
         return ilogit(self.logit_alpha_arr)
