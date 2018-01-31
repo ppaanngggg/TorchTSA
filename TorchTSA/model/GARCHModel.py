@@ -118,6 +118,26 @@ class GARCHModel:
         if self.use_mu:
             self.mu_arr = params[-1]
 
+    def predict(
+            self,
+            _arr: typing.Sequence[float],
+            _latent: typing.Sequence[float] = None,
+    ) -> float:
+        arr = np.array(_arr)
+        if _latent is None:
+            latent = self.latent_arr
+        else:
+            latent = np.array(_latent)
+        tmp_arr = (arr[-self.alpha_num:] - self.getMu()) ** 2
+        tmp_arr = tmp_arr[::-1]
+        value = self.getAlphas().dot(tmp_arr) + self.getConst()
+        if self.beta_num > 0:
+            tmp_latent = latent[-self.beta_num:]
+            tmp_latent = tmp_latent[::-1]
+            value += self.getBetas().dot(tmp_latent)
+
+        return value
+
     def getAlphas(self) -> np.ndarray:
         return ilogit(self.logit_alpha_arr)
 

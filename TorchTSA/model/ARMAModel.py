@@ -43,11 +43,12 @@ class ARMAModel:
         phi = _params[1:1 + self.phi_num]
         theta = _params[1 + self.phi_num: 1 + self.phi_num + self.theta_num]
         if self.use_const:
-            const = _params[-1]
+            mu = _params[-1]
         else:
-            const = self.const_arr
+            mu = self.const_arr
 
-        mu = phi.dot(self.x_arr) + const
+        if self.phi_num > 0:
+            mu = phi.dot(self.x_arr) + mu
         if self.theta_num > 0:
             self.latent_arr[:self.theta_num] = 0.0
             self.latent_arr[self.theta_num:] = self.y_arr - mu
@@ -86,7 +87,8 @@ class ARMAModel:
 
         # init latent arr
         self.y_arr = self.arr[self.phi_num:]
-        self.x_arr = stack_delay_arr(self.arr, self.phi_num)
+        if self.phi_num > 0:
+            self.x_arr = stack_delay_arr(self.arr, self.phi_num)
         if self.theta_num > 0:
             self.latent_arr = np.zeros(
                 len(self.arr) - self.phi_num + self.theta_num
@@ -114,10 +116,10 @@ class ARMAModel:
         params = res.x
 
         # update array
-        self.log_sigma_arr = params[0]
+        self.log_sigma_arr = params[0:1]
         params = params[1:]
         if self.use_const:
-            self.const_arr = params[-1]
+            self.const_arr = params[-1:]
         if self.phi_num > 0:
             self.phi_arr = params[:self.phi_num]
         if self.theta_num > 0:
@@ -137,11 +139,11 @@ class ARMAModel:
         if self.phi_num > 0:
             tmp_arr = arr[-self.phi_num:]
             tmp_arr = tmp_arr[::-1]
-            value += (tmp_arr * self.phi_arr).sum()
+            value += self.phi_arr.dot(tmp_arr)
         if self.theta_num > 0:
             tmp_latent = latent[-self.theta_num:]
             tmp_latent = tmp_latent[::-1]
-            value += (tmp_latent * self.theta_arr).sum()
+            value += self.theta_arr.dot(tmp_latent)
 
         return value
 

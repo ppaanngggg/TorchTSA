@@ -17,7 +17,9 @@ print(
     arch_model.getConst(),
     arch_model.getMu(),
 )
+print('predict value:', arch_model.predict(sim_data))
 
 pf_model = pf.GARCH(sim_data, 0, 2)
 pf_ret = pf_model.fit("MLE")
 pf_ret.summary()
+print(pf_model.predict())
