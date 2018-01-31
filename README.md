@@ -1,6 +1,6 @@
 # TorchTSA
 
-Use PyTorch to implement classical time series models. PyTorch has full ability to autograd, so it very easy to estimate models. And PyTorch is easy to turn to or from numpy.
+Use scipy and numpy to estimate classical time series models and simulate time series processes. Speed up by cython.
 
 ## Install
 
@@ -10,15 +10,13 @@ Use PyTorch to implement classical time series models. PyTorch has full ability 
 
 - model:
 
-  - ARModel
-  - MAModel
-  - ARMAModel
+  - ARModel, MAModel, ARMAModel
+  - ARCHModel, GARCHModel
 
 - simulate:
 
-  - ARSim
-  - MASim
-  - ARMASim
+  - ARSim, MASim, ARMASim
+  - ARCHSim, GARCHSim
 
 > Please refer to samples
 
