@@ -97,8 +97,7 @@ class GARCHModel:
                 self.logit_beta_arr.fill(logit(init_value))
         # 4. log_const_arr
         if self.log_const_arr is None:
-            self.log_const_arr = np.empty(1)
-            self.log_const_arr.fill(np.log(init_value))
+            self.log_const_arr = np.log(np.var(self.arr, keepdims=True))
 
         # init target, latent_arr
         self.y_arr = self.arr[self.alpha_num:]
@@ -120,9 +119,11 @@ class GARCHModel:
         self.logit_beta_arr = params[
             self.alpha_num:self.alpha_num + self.beta_num
         ]
-        self.log_const_arr = params[self.alpha_num + self.beta_num]
+        self.log_const_arr = params[
+            self.alpha_num + self.beta_num:self.alpha_num + self.beta_num + 1
+        ]
         if self.use_mu:
-            self.mu_arr = params[-1]
+            self.mu_arr = params[-1:]
 
     def predict(
             self,
