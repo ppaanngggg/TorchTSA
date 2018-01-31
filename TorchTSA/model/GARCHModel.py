@@ -63,6 +63,16 @@ class GARCHModel:
 
         return loss
 
+    def optimize(
+            self, _init_params: np.ndarray,
+            _max_iter: int = 50, _disp: bool = False,
+    ):
+        res = minimize(
+            self.func, _init_params, method='L-BFGS-B',
+            options={'maxiter': _max_iter, 'disp': _disp}
+        )
+        return res.x
+
     def fit(
             self, _arr: typing.Sequence[float],
             _max_iter: int = 50, _disp: bool = False,
@@ -106,11 +116,7 @@ class GARCHModel:
         if self.use_mu:
             init_params = np.concatenate((init_params, self.mu_arr))
 
-        res = minimize(
-            self.func, init_params, method='L-BFGS-B',
-            options={'maxiter': _max_iter, 'disp': _disp}
-        )
-        params = res.x
+        params = self.optimize(init_params, _max_iter, _disp)
 
         self.logit_alpha_arr = params[:self.alpha_num]
         self.logit_beta_arr = params[self.alpha_num:self.alpha_num + self.beta_num]

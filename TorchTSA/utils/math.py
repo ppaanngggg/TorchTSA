@@ -10,5 +10,6 @@ def ilogit(x):
 
 
 def logpdf(value, mu, var):
-    return - (value - mu) ** 2 / (2 * var) - \
-           np.log(np.sqrt(2 * np.pi * var))
+    return -0.5 * (
+            np.log(2 * np.pi) + np.log(var) + (value - mu) ** 2 / var
+    )
