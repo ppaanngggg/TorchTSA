@@ -1,6 +1,8 @@
 import logging
 import time
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pyflux as pf
 
 from TorchTSA.model import GARCHModel
@@ -10,7 +12,7 @@ from TorchTSA.simulate import GARCHSim
 logging.basicConfig(level=logging.INFO)
 
 garch_sim = GARCHSim(
-    (0.5,), (0.5,), _const=0.1
+    (0.5,), (0.5,), _const=1e-6
 )
 sim_data = garch_sim.sample_n(2000)
 
@@ -35,6 +37,12 @@ print(
     igarch_model.getConst(), igarch_model.getMu(),
 )
 print('predict value:', igarch_model.predict(sim_data))
+
+sim_line, = plt.plot(np.sqrt(garch_sim.var[2:]), label='simulation')
+garch_line, = plt.plot(garch_model.getVolatility(), label='garch')
+igarch_line, = plt.plot(igarch_model.getVolatility(), label='igarch')
+plt.legend(handles=[sim_line, garch_line, igarch_line])
+plt.show()
 
 # pyflux's garch model
 pf_model = pf.GARCH(sim_data, 1, 1)

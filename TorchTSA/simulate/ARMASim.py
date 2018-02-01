@@ -14,29 +14,32 @@ class ARMASim:
     ):
         # AR part
         self.phi_arr = np.array(_phi_arr)
+        assert np.all(np.abs(self.phi_arr) < 1)
+        self.inv_phi_arr = self.phi_arr[::-1]
         self.phi_num = len(self.phi_arr)
         # MA part
         self.theta_arr = np.array(_theta_arr)
+        assert np.all(np.abs(self.theta_arr) < 1)
+        self.inv_theta_arr = self.theta_arr[::-1]
         self.theta_num = len(self.theta_arr)
 
         self.const = _const
         self.sigma = _sigma
+        assert self.sigma > 0
 
-        self.ret = [0.0] * self.phi_num
+        self.ret = [self.const] * self.phi_num
         self.latent = [0.0] * self.theta_num
 
     def sample(self) -> float:
         new_value = self.const
         if self.phi_num > 0:  # AR part
-            tmp = self.ret[-self.phi_num:]
-            tmp.reverse()
-            tmp = np.array(tmp)
-            new_value += (tmp * self.phi_arr).sum()
+            new_value += self.inv_phi_arr.dot(
+                self.ret[-self.phi_num:]
+            )
         if self.theta_num > 0:  # MA part
-            tmp = self.latent[-self.theta_num:]
-            tmp.reverse()
-            tmp = np.array(tmp)
-            new_value += (tmp * self.theta_arr).sum()
+            new_value += self.inv_theta_arr.dot(
+                self.latent[-self.theta_num:]
+            )
 
         new_info = random.gauss(0, self.sigma)
         new_value += new_info

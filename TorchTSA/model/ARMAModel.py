@@ -147,6 +147,12 @@ class ARMAModel:
 
         return value
 
+    def getLatent(self) -> typing.Union[None, np.ndarray]:
+        if self.theta_num > 0:
+            return self.latent_arr[self.theta_num:]
+        else:
+            return None
+
     def getPhis(self) -> np.ndarray:
         return self.phi_arr
 

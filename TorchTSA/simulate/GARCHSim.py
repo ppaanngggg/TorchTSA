@@ -17,15 +17,18 @@ class GARCHSim:
         # AR part
         self.alpha_arr = np.array(_alpha_arr)
         assert np.all(self.alpha_arr > 0)
+        self.inv_alpha_arr = self.alpha_arr[::-1]
         self.alpha_num = len(_alpha_arr)
 
         # MA part
         self.beta_arr = np.array(_beta_arr)
         assert np.all(self.beta_arr > 0)
+        self.inv_beta_arr = self.beta_arr[::-1]
         self.beta_num = len(_beta_arr)
 
-        for a, b in zip(_alpha_arr, _beta_arr):
-            assert a + b <= 1
+        # safety assert
+        params_sum = self.alpha_arr.sum() + self.beta_arr.sum()
+        assert params_sum <= 1.0
 
         self.const = _const
         assert self.const > 0
@@ -33,21 +36,20 @@ class GARCHSim:
         self.mu = _mu
 
         self.ret = []
-        self.square = [0.0] * self.alpha_num
-        self.var = [0.0] * self.beta_num
+        init_value = self.const * (1.0 + params_sum)
+        self.square = [init_value] * self.alpha_num
+        self.var = [init_value] * self.beta_num
 
     def sample(self) -> float:
         sigma2 = self.const
         if self.alpha_num > 0:  # AR part
-            tmp = self.square[-self.alpha_num:]
-            tmp.reverse()
-            tmp = np.array(tmp)
-            sigma2 += (tmp * self.alpha_arr).sum()
+            sigma2 += self.inv_alpha_arr.dot(
+                self.square[-self.alpha_num:]
+            )
         if self.beta_num > 0:  # MA part
-            tmp = self.var[-self.beta_num:]
-            tmp.reverse()
-            tmp = np.array(tmp)
-            sigma2 += (tmp * self.beta_arr).sum()
+            sigma2 += self.inv_beta_arr.dot(
+                self.var[-self.beta_num:]
+            )
         # update value
         new_info = random.gauss(0, math.sqrt(sigma2))
         new_value = self.mu + new_info

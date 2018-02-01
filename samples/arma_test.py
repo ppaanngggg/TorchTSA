@@ -1,6 +1,7 @@
 import logging
 import time
 
+import matplotlib.pyplot as plt
 import pyflux as pf
 
 from TorchTSA.model import ARMAModel
@@ -23,6 +24,11 @@ print(
     arma_model.getConst(), arma_model.getSigma(),
 )
 print('predict value:', arma_model.predict(sim_data))
+
+sim_line, = plt.plot(arma_sim.latent[3:], label='simulation')
+arma_line, = plt.plot(arma_model.getLatent(), label='arma')
+plt.legend(handles=[sim_line, arma_line])
+plt.show()
 
 pf_model = pf.ARIMA(data=sim_data, ar=1, ma=2, integ=0)
 start_time = time.time()
