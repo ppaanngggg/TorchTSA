@@ -25,6 +25,9 @@ print(
 )
 print('predict value:', arma_model.predict(sim_data))
 
+plt.subplot('211')
+plt.plot(sim_data)
+plt.subplot('212')
 sim_line, = plt.plot(arma_sim.latent[3:], label='simulation')
 arma_line, = plt.plot(arma_model.getLatent(), label='arma')
 plt.legend(handles=[sim_line, arma_line])

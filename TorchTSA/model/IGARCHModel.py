@@ -13,7 +13,7 @@ class IGARCHModel(GARCHModel):
         cons = {
             'type': 'eq',
             'fun': lambda x: ilogit(
-                x[:self.alpha_num + self.beta_num]
+                x[1:self.alpha_num + self.beta_num + 1]
             ).sum() - 1.0,
         }
         ret = minimize(

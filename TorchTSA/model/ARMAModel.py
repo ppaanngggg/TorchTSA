@@ -24,6 +24,9 @@ class ARMAModel:
         self.phi_num = _phi_num  # len of phi_arr
         self.theta_num = _theta_num  # len of theta_arr
         self.use_const = _use_const
+        self.split_index = np.cumsum((
+            1, self.phi_num, self.theta_num
+        ))
 
         # model params
         self.phi_arr: np.ndarray = None
@@ -39,13 +42,12 @@ class ARMAModel:
 
     def func(self, _params: np.ndarray):
         # split params
-        sigma = np.exp(_params[0])
-        phi = _params[1:1 + self.phi_num]
-        theta = _params[1 + self.phi_num: 1 + self.phi_num + self.theta_num]
         if self.use_const:
             mu = _params[-1]
         else:
             mu = self.const_arr
+        sigma, phi, theta, _ = np.split(_params, self.split_index)
+        sigma = np.exp(sigma)
 
         if self.phi_num > 0:
             mu = phi.dot(self.x_arr) + mu
@@ -53,11 +55,12 @@ class ARMAModel:
             self.latent_arr[:self.theta_num] = 0.0
             self.latent_arr[self.theta_num:] = self.y_arr - mu
             arma_recursion(self.latent_arr, theta)
-            mu += theta.dot(stack_delay_arr(
-                self.latent_arr, self.theta_num
-            ))
+        else:
+            self.latent_arr = self.y_arr - mu
 
-        loss = -logpdf(self.y_arr, mu, sigma ** 2).mean()
+        loss = -logpdf(
+            self.latent_arr[self.theta_num:], 0, sigma ** 2
+        ).mean()
 
         return loss
 
@@ -68,7 +71,14 @@ class ARMAModel:
         assert len(_arr) > self.phi_num
         assert len(_arr) > self.theta_num
 
+        # init latent arr
         self.arr = np.array(_arr)
+        self.y_arr = self.arr[self.phi_num:]
+        if self.phi_num > 0:
+            self.x_arr = stack_delay_arr(self.arr, self.phi_num)
+        self.latent_arr = np.zeros(
+            len(self.arr) - self.phi_num + self.theta_num
+        )
 
         # 1. const
         if self.use_const:
@@ -79,35 +89,18 @@ class ARMAModel:
         if self.log_sigma_arr is None:
             self.log_sigma_arr = np.log(np.std(self.arr, keepdims=True))
         # 3. phi
-        if self.phi_num > 0:
+        if self.phi_arr is None:
             self.phi_arr = np.zeros(self.phi_num)
         # 4. theta
-        if self.theta_num > 0:
+        if self.theta_arr is None:
             self.theta_arr = np.zeros(self.theta_num)
 
-        # init latent arr
-        self.y_arr = self.arr[self.phi_num:]
-        if self.phi_num > 0:
-            self.x_arr = stack_delay_arr(self.arr, self.phi_num)
-        if self.theta_num > 0:
-            self.latent_arr = np.zeros(
-                len(self.arr) - self.phi_num + self.theta_num
-            )
-
         # concatenate params
-        init_params = self.log_sigma_arr
-        if self.phi_num > 0:
-            init_params = np.concatenate((
-                init_params, self.phi_arr
-            ))
-        if self.theta_num > 0:
-            init_params = np.concatenate((
-                init_params, self.theta_arr
-            ))
+        init_params = np.concatenate((
+            self.log_sigma_arr, self.phi_arr, self.theta_arr
+        ))
         if self.use_const:
-            init_params = np.concatenate((
-                init_params, self.const_arr
-            ))
+            init_params = np.concatenate((init_params, self.const_arr))
 
         res = minimize(
             self.func, init_params, method='L-BFGS-B',
@@ -116,14 +109,11 @@ class ARMAModel:
         params = res.x
 
         # update array
-        self.log_sigma_arr = params[0:1]
-        params = params[1:]
+        self.log_sigma_arr, self.phi_arr, self.theta_arr, _ = np.split(
+            params, self.split_index
+        )
         if self.use_const:
             self.const_arr = params[-1:]
-        if self.phi_num > 0:
-            self.phi_arr = params[:self.phi_num]
-        if self.theta_num > 0:
-            self.theta_arr = params[self.phi_num:self.phi_num + self.theta_num]
 
     def predict(
             self,
