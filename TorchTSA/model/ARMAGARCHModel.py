@@ -152,6 +152,42 @@ class ARMAGARCHModel:
         if self.use_mu:
             self.mu_arr = params[-1:]
 
+    def predict(
+            self,
+            _arr: typing.Sequence[float],
+            _latent_arma: typing.Sequence[float] = None,
+            _latent_garch: typing.Sequence[float] = None,
+    ) -> (float, float):
+        # get data
+        arr = np.array(_arr)
+        if _latent_arma is None:
+            latent_arma = self.latent_arma_arr
+        else:
+            latent_arma = np.array(_latent_arma)
+        if _latent_garch is None:
+            latent_garch = self.latent_garch_arr
+        else:
+            latent_garch = np.array(_latent_garch)
+
+        # mean
+        mean = self.mu_arr[0]
+        if self.phi_num > 0:
+            tmp_arr = arr[-self.phi_num:][::-1]
+            mean += self.phi_arr.dot(tmp_arr)
+        if self.theta_num > 0:
+            tmp_arr = latent_arma[-self.theta_num:][::-1]
+            mean += self.theta_arr.dot(tmp_arr)
+
+        # var
+        var = self.getConst()[0]
+        tmp_arr = latent_arma[-self.alpha_num:][::-1]
+        var += self.getAlphas().dot(tmp_arr ** 2)
+        if self.beta_num > 0:
+            tmp_arr = latent_garch[-self.beta_num:][::-1]
+            var += self.getBetas().dot(tmp_arr)
+
+        return mean, var
+
     def getPhis(self) -> np.ndarray:
         return self.phi_arr
 

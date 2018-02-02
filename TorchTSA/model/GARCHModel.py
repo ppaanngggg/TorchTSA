@@ -134,7 +134,7 @@ class GARCHModel:
             latent = np.array(_latent)
         tmp_arr = (arr[-self.alpha_num:] - self.getMu()) ** 2
         tmp_arr = tmp_arr[::-1]
-        value = self.getAlphas().dot(tmp_arr) + self.getConst()
+        value = self.getAlphas().dot(tmp_arr) + self.getConst()[0]
         if self.beta_num > 0:
             tmp_latent = latent[-self.beta_num:]
             tmp_latent = tmp_latent[::-1]
