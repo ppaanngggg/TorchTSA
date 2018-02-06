@@ -1,19 +1,19 @@
 import numpy as np
 from scipy.optimize import minimize
 
-from TorchTSA.model.GARCHModel import GARCHModel
+from TorchTSA.model.ARMAGARCHModel import ARMAGARCHModel
 from TorchTSA.utils.math import ilogit
 
 
-class IGARCHModel(GARCHModel):
+class ARMAIGARCHModel(ARMAGARCHModel):
     def optimize(
             self, _init_params: np.ndarray,
-            _max_iter: int = 50, _disp: bool = False,
+            _max_iter: int = 200, _disp: bool = False,
     ):
         cons = {
             'type': 'eq',
             'fun': lambda x: ilogit(
-                x[1:self.alpha_num + self.beta_num + 1]
+                x[self.split_index[2]:self.split_index[4]]
             ).sum() - 1.0,
         }
         ret = minimize(
