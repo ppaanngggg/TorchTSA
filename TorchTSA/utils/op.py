@@ -11,3 +11,13 @@ def stack_delay_arr(
         shift = i + 1
         ret_list.append(_arr[_num - shift: -shift])
     return np.stack(ret_list)
+
+
+def stack_delay_arr_T(
+        _arr: np.ndarray, _num: int
+) -> np.ndarray:
+    ret_list = []
+    for i in range(_num):
+        shift = i + 1
+        ret_list.append(_arr[_num - shift: -shift].T)
+    return np.stack(ret_list)

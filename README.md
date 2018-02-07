@@ -12,13 +12,15 @@ Use scipy and numpy to estimate classical time series models and simulate time s
 
   - ARModel, MAModel, ARMAModel
   - ARCHModel, GARCHModel, IGARCHModel
-  - ARMAGARCHModel
+  - ARMAGARCHModel, ARMAIGARCHModel
+  - VARModel
 
 - simulate:
 
   - ARSim, MASim, ARMASim
   - ARCHSim, GARCHSim
   - ARMAGARCHSim
+  - VARSim
 
 > Please refer to samples
 
