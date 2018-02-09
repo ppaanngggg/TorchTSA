@@ -8,12 +8,12 @@ class MAModel(ARMAModel):
     def __init__(
             self,
             _theta_num: int = 1,
-            _use_const: bool = True
+            _use_mu: bool = True
     ):
         super().__init__(
             _phi_num=0,
             _theta_num=_theta_num,
-            _use_const=_use_const,
+            _use_mu=_use_mu,
         )
 
     def getPhis(self):

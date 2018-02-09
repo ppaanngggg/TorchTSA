@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 from TorchTSA.model import VARModel
@@ -21,7 +23,9 @@ sim = VARSim(
 sim_data = sim.sample_n(2000)
 
 var_model = VARModel(2, 2)
-var_model.fit(sim_data, _disp=True)
+start_time = time.time()
+var_model.fit(sim_data)
+print(time.time() - start_time)
 
 print(B.dot(B.T))
 print(var_model.getPhis())
