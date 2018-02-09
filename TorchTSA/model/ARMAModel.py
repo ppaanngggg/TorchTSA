@@ -14,7 +14,7 @@ class ARMAModel:
             self,
             _phi_num: int = 1,
             _theta_num: int = 1,
-            _use_const: bool = True
+            _use_mu: bool = True
     ):
         assert _phi_num >= 0
         assert _theta_num >= 0
@@ -23,15 +23,15 @@ class ARMAModel:
         # fitter params
         self.phi_num = _phi_num  # len of phi_arr
         self.theta_num = _theta_num  # len of theta_arr
-        self.use_const = _use_const
+        self.use_mu = _use_mu
         self.split_index = np.cumsum((
-            1, self.phi_num, self.theta_num
+            1, self.phi_num, self.theta_num,
         ))
 
         # model params
         self.phi_arr: np.ndarray = None
         self.theta_arr: np.ndarray = None
-        self.const_arr: np.ndarray = None
+        self.mu_arr: np.ndarray = None
         self.log_sigma_arr: np.ndarray = None
 
         # data buf for fitting
@@ -42,21 +42,22 @@ class ARMAModel:
 
     def func(self, _params: np.ndarray):
         # split params
-        if self.use_const:
+        if self.use_mu:
             mu = _params[-1]
         else:
-            mu = self.const_arr
+            mu = self.mu_arr
         sigma, phi, theta, _ = np.split(_params, self.split_index)
         sigma = np.exp(sigma)
 
+        tmp = mu
         if self.phi_num > 0:
-            mu = phi.dot(self.x_arr) + mu
+            tmp += phi.dot(self.x_arr)
         if self.theta_num > 0:
             self.latent_arr[:self.theta_num] = 0.0
-            self.latent_arr[self.theta_num:] = self.y_arr - mu
+            self.latent_arr[self.theta_num:] = self.y_arr - tmp
             arma_recursion(self.latent_arr, theta)
         else:
-            self.latent_arr = self.y_arr - mu
+            self.latent_arr = self.y_arr - tmp
 
         loss = -logpdf(
             self.latent_arr[self.theta_num:], 0, sigma ** 2
@@ -76,15 +77,15 @@ class ARMAModel:
         self.y_arr = self.arr[self.phi_num:]
         if self.phi_num > 0:
             self.x_arr = stack_delay_arr(self.arr, self.phi_num)
-        self.latent_arr = np.zeros(
+        self.latent_arr = np.empty(
             len(self.arr) - self.phi_num + self.theta_num
         )
 
         # 1. const
-        if self.use_const:
-            self.const_arr = np.mean(self.arr, keepdims=True)
+        if self.use_mu:
+            self.mu_arr = np.mean(self.arr, keepdims=True)
         else:
-            self.const_arr = np.zeros(1)
+            self.mu_arr = np.zeros(1)
         # 2. sigma
         if self.log_sigma_arr is None:
             self.log_sigma_arr = np.log(np.std(self.arr, keepdims=True))
@@ -97,10 +98,10 @@ class ARMAModel:
 
         # concatenate params
         init_params = np.concatenate((
-            self.log_sigma_arr, self.phi_arr, self.theta_arr
+            self.log_sigma_arr, self.phi_arr, self.theta_arr,
         ))
-        if self.use_const:
-            init_params = np.concatenate((init_params, self.const_arr))
+        if self.use_mu:
+            init_params = np.concatenate((init_params, self.mu_arr))
 
         res = minimize(
             self.func, init_params, method='L-BFGS-B',
@@ -112,8 +113,8 @@ class ARMAModel:
         self.log_sigma_arr, self.phi_arr, self.theta_arr, _ = np.split(
             params, self.split_index
         )
-        if self.use_const:
-            self.const_arr = params[-1:]
+        if self.use_mu:
+            self.mu_arr = params[-1:]
 
     def predict(
             self,
@@ -125,7 +126,7 @@ class ARMAModel:
             latent = self.latent_arr
         else:
             latent = np.array(_latent)
-        value = self.const_arr[0]
+        value = self.mu_arr[0]
         if self.phi_num > 0:
             tmp_arr = arr[-self.phi_num:]
             tmp_arr = tmp_arr[::-1]
@@ -149,8 +150,8 @@ class ARMAModel:
     def getThetas(self) -> np.ndarray:
         return self.theta_arr
 
-    def getConst(self) -> np.ndarray:
-        return self.const_arr
+    def getMu(self) -> np.ndarray:
+        return self.mu_arr
 
     def getSigma(self) -> np.ndarray:
         return np.exp(self.log_sigma_arr)

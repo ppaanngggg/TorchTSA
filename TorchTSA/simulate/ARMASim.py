@@ -10,7 +10,7 @@ class ARMASim:
             self,
             _phi_arr: typing.Sequence[float] = (),
             _theta_arr: typing.Sequence[float] = (),
-            _const: float = 0.0, _sigma: float = 1.0,
+            _mu: float = 0.0, _sigma: float = 1.0,
     ):
         # AR part
         self.phi_arr = np.array(_phi_arr)
@@ -23,15 +23,15 @@ class ARMASim:
         self.inv_theta_arr = self.theta_arr[::-1]
         self.theta_num = len(self.theta_arr)
 
-        self.const = _const
+        self.mu = _mu
         self.sigma = _sigma
         assert self.sigma > 0
 
-        self.ret = [self.const] * self.phi_num
-        self.latent = [0.0] * self.theta_num
+        self.ret = [random.gauss(self.mu, self.sigma) for _ in range(self.phi_num)]
+        self.latent = [random.gauss(0, self.sigma) for _ in range(self.theta_num)]
 
     def sample(self) -> float:
-        new_value = self.const
+        new_value = self.mu
         if self.phi_num > 0:  # AR part
             new_value += self.inv_phi_arr.dot(
                 self.ret[-self.phi_num:]
