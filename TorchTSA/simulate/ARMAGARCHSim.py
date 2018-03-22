@@ -46,9 +46,9 @@ class ARMAGARCHSim:
         self.mu = _mu
 
         # buffers
-        self.ret = [self.mu] * self.phi_num
         init_value = self.const * (1.0 + params_sum)
-        self.new_buf = [0.0] * self.theta_num
+        self.ret = [random.gauss(self.mu, init_value)] * self.phi_num
+        self.new_buf = [random.gauss(0.0, init_value)] * self.theta_num
         self.square_buf = [init_value] * self.alpha_num
         self.var_buf = [init_value] * self.beta_num
 
